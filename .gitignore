@@ -1,0 +1,23 @@
+# Secrets
+.env
+config/*.json
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Generated legacy data / local Spark output
+seed_data/
+spark-warehouse/
+metastore_db/
+derby.log
+
+# Databricks bundle state
+databricks/.databricks/
+
+# Airflow runtime
+airflow/logs/
+
+.DS_Store

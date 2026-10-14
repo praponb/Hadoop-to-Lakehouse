@@ -1,0 +1,123 @@
+# Local half of the hybrid setup: single-node HDFS (legacy source) + Airflow (LocalExecutor).
+# GCS, Databricks and BigQuery are reached from the Airflow containers over the internet.
+
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile.airflow
+  image: hadoop-to-lakehouse/airflow:2.10.2
+  user: "${AIRFLOW_UID:-50000}:0"
+  env_file:
+    - path: .env
+      required: false
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "false"
+    # Container path of the mounted key; set here so a host-side GOOGLE_APPLICATION_CREDENTIALS never leaks in.
+    GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/config/gcp-service-account.json
+    AIRFLOW_CONN_HTTP_HDFS: "http://${HDFS_NAMENODE_HOST:-namenode}:${HDFS_WEBHDFS_PORT:-9870}"
+    AIRFLOW_CONN_DATABRICKS_DEFAULT: '{"conn_type": "databricks", "host": "${DATABRICKS_HOST:-}", "password": "${DATABRICKS_TOKEN:-}"}'
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/plugins:/opt/airflow/plugins
+    - ./config:/opt/airflow/config:ro
+    - airflow-logs:/opt/airflow/logs
+  depends_on: &airflow-common-depends-on
+    postgres:
+      condition: service_healthy
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    platform: linux/amd64 # amd64-only image; runs under emulation on Apple silicon
+    container_name: namenode
+    hostname: namenode
+    restart: unless-stopped
+    ports:
+      - "9870:9870" # NameNode UI + WebHDFS
+      - "9000:9000" # fs.defaultFS RPC
+    environment:
+      CLUSTER_NAME: legacy-erp
+    env_file:
+      - ./hadoop.env
+    volumes:
+      - hadoop-namenode:/hadoop/dfs/name
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    platform: linux/amd64
+    container_name: datanode
+    hostname: datanode # WebHDFS OPEN redirects here, so Airflow must resolve it (same network)
+    restart: unless-stopped
+    ports:
+      - "9864:9864"
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+    env_file:
+      - ./hadoop.env
+    volumes:
+      - hadoop-datanode:/hadoop/dfs/data
+    depends_on:
+      - namenode
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  airflow-init:
+    <<: *airflow-common
+    command: version
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: airflow
+      _AIRFLOW_WWW_USER_PASSWORD: airflow
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+      namenode:
+        condition: service_started
+
+volumes:
+  hadoop-namenode:
+  hadoop-datanode:
+  airflow-postgres:
+  airflow-logs:

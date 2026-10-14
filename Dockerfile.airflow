@@ -1,0 +1,12 @@
+FROM apache/airflow:2.10.2-python3.11
+
+ARG AIRFLOW_VERSION=2.10.2
+ARG PYTHON_VERSION=3.11
+
+COPY requirements.txt /requirements.txt
+
+# Use the official constraints, dropping their pyspark pin so pyspark==3.5.3 resolves.
+RUN curl -sSfL "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt" \
+      | grep -v '^pyspark==' > /tmp/constraints.txt \
+    && pip install --no-cache-dir "apache-airflow==${AIRFLOW_VERSION}" -r /requirements.txt -c /tmp/constraints.txt \
+    && rm /tmp/constraints.txt

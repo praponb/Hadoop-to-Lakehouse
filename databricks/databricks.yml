@@ -1,0 +1,71 @@
+# Databricks Asset Bundle: the Bronze -> Silver -> Gold workflow on serverless jobs compute.
+#
+# Auth comes from the `databricksgcp` profile in ~/.databrickscfg (DATABRICKS_PROFILE in the Makefile).
+#   make bundle-validate
+#   make bundle-deploy     # Airflow triggers the deployed job by id (DATABRICKS_JOB_ID)
+#   databricks bundle run -t dev legacy_medallion --profile databricksgcp --params batch_date=2026-10-14
+bundle:
+  name: hadoop_to_lakehouse
+
+variables:
+  catalog:
+    default: legacy_migration_cat
+  landing_path:
+    default: gs://moukda-lakehouse-landing
+  lakehouse_path:
+    default: gs://moukda-lakehouse-uc
+
+resources:
+  jobs:
+    legacy_medallion:
+      name: legacy_medallion
+      max_concurrent_runs: 1
+      # Serverless: no cluster spec. STANDARD is the cost-optimised mode (slower start-up, fewer DBUs).
+      performance_target: STANDARD
+      environments:
+        - environment_key: serverless_py311
+          spec:
+            environment_version: "2" # Python 3.11, matching the local test venv
+      parameters:
+        - name: batch_date
+          default: "{{job.start_time.iso_date}}"
+      tasks:
+        - task_key: bronze_ingest
+          environment_key: serverless_py311
+          # A new source column stops Auto Loader once (schema evolution); the retry picks it up.
+          max_retries: 2
+          min_retry_interval_millis: 0
+          spark_python_task:
+            python_file: ./src/bronze_autoloader.py
+            parameters: &job_args
+              - --batch-date
+              - "{{job.parameters.batch_date}}"
+              - --catalog
+              - ${var.catalog}
+              - --landing-path
+              - ${var.landing_path}
+              - --lakehouse-path
+              - ${var.lakehouse_path}
+
+        - task_key: silver_upsert
+          depends_on:
+            - task_key: bronze_ingest
+          environment_key: serverless_py311
+          spark_python_task:
+            python_file: ./src/silver_transform.py
+            parameters: *job_args
+
+        - task_key: gold_aggregate
+          depends_on:
+            - task_key: silver_upsert
+          environment_key: serverless_py311
+          spark_python_task:
+            python_file: ./src/gold_aggregations.py
+            parameters: *job_args
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://8259554454724321.1.gcp.databricks.com

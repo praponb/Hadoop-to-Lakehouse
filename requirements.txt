@@ -1,0 +1,10 @@
+# Installed with the Airflow 2.10.2 constraints file minus its pyspark pin
+# (constraints pin pyspark==3.5.2; the spec and delta-spark need 3.5.3).
+apache-airflow-providers-databricks
+apache-airflow-providers-google
+apache-airflow-providers-http
+hdfs
+google-cloud-storage
+pyspark==3.5.3
+delta-spark==3.2.1
+pytest
