@@ -170,7 +170,6 @@ that date's partition exists in HDFS first.
 | `DATABRICKS_JOB_ID` | DAG | ID of the deployed bundle job |
 | `DATABRICKS_WAREHOUSE_ID` | DAG audit | SQL warehouse for the row-count audit |
 | `AIRFLOW_UID` | compose | Container user |
-| `GCP_REGION`, `BQ_DATASET`, `BQ_CONNECTION` | *(not read yet)* | Reference values; the SQL files write them out directly |
 
 Airflow connections come from `AIRFLOW_CONN_*` variables in `docker-compose.yml`. Secrets live only in
 `.env` and `config/`, which are both git-ignored.
