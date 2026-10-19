@@ -82,7 +82,8 @@ The Databricks steps use `DatabricksRunNowOperator` on the deployed Asset Bundle
 | `hadoop_seed/load_to_hdfs.sh` | Loads generated partitions into HDFS, replacing each partition |
 | `airflow/plugins/hdfs_to_gcs_transfer.py` | `HdfsToGcsBridge`: streams from WebHDFS to GCS and returns a manifest (`files_transferred`, `total_bytes`, `md5_hashes`) |
 | `airflow/dags/hadoop_to_lakehouse_dag.py` | The DAG |
-| `databricks/databricks.yml` | Asset Bundle: job `legacy_medallion`, `bronze_ingest → silver_upsert → gold_aggregate`, serverless with `STANDARD` performance target |
+| `databricks/databricks.yml` | Asset Bundle: job `legacy_medallion`, `bronze_ingest → silver_upsert → gold_aggregate`, serverless with `STANDARD` performance target; dashboard `lakehouse_overview` |
+| `databricks/dashboards/lakehouse_overview.lvdash.json` | AI/BI dashboard: a Sales page over Gold and a Data quality page over Bronze and Silver |
 | `databricks/setup_uc.sql` | Unity Catalog setup: external locations, catalog, schemas, Silver and Gold tables |
 | `databricks/src/` | `bronze_autoloader.py`, `silver_transform.py`, `gold_aggregations.py`, `common/spark_session.py` |
 | `bigquery/create_biglake_tables.sql` | BigLake `DELTA_LAKE` tables over Gold |
@@ -137,7 +138,8 @@ make hdfs-ls
    both buckets, and run [`databricks/setup_uc.sql`](databricks/setup_uc.sql) on the SQL warehouse.
 4. **Bundle:** `make bundle-validate` and `make bundle-deploy`. These use the CLI profile in
    `DATABRICKS_PROFILE`, `databricksgcp` by default. Put the deployed job's ID in `.env` as `DATABRICKS_JOB_ID`,
-   then run `docker compose up -d` to reload Airflow.
+   then run `docker compose up -d` to reload Airflow. The deploy also publishes the AI/BI dashboard
+   "Legacy lakehouse overview", which runs on the SQL warehouse in the bundle's `warehouse_id` variable.
 5. **BigQuery:** create a `CLOUD_RESOURCE` connection, grant its service account `roles/storage.objectViewer` on the
    lakehouse bucket, then run [`bigquery/create_biglake_tables.sql`](bigquery/create_biglake_tables.sql).
 
