@@ -54,9 +54,14 @@ Added to `SPEC.md` as implementation notes 12–16, plus an *As implemented* lin
       latest interval. That needs an HDFS partition for that date, or the sensor waits an hour and fails.
       Done 2026-10-19: run `scheduled__2026-10-18T00:00:00+00:00` succeeded (15:39–16:00 Bangkok time;
       audit: Bronze 10,000, Silver 9,187, quarantine 344, 0 duplicate keys, 194 Gold daily rows). DAG paused again.
-- [ ] **C2. Bronze schema-change retry through Airflow.** When a new column appears, the bundle job's
+- [x] **C2. Bronze schema-change retry through Airflow.** When a new column appears, the bundle job's
       `max_retries` recovered (tested on day 2). The Airflow path relies on the DAG's `retries: 1`, triggering
       `bronze_ingest` again, which hasn't been exercised.
+      Done 2026-10-19: run `manual__c2_2026-10-16` (16:13–16:40 Bangkok time) loaded 10-16 with a new
+      `sales_channel` column. Bronze's first Databricks attempt failed with `UNKNOWN_FIELD_EXCEPTION`, and the
+      job's own retry succeeded inside the same run, so every Airflow task passed on attempt 1. The DAG's
+      `retries: 1` is only a fallback. Audit: Bronze 10,000, Silver 9,192, quarantine 348, 0 duplicate keys.
+      SPEC.md note 8 and the Bronze docstring corrected. DAG paused again.
 
 ## D. Housekeeping
 
