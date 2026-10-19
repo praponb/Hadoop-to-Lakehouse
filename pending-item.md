@@ -83,3 +83,4 @@ Added to `SPEC.md` as implementation notes 12–16, plus an *As implemented* lin
   4. Service account `airflow-lakehouse` (and its key `69733a77…`), plus the local key file
   5. The Databricks PAT `moukda-lakehouse` (expires 2026-10-28)
   6. Local: `docker compose down -v`, image, `.venv`, `seed_data/`
+  7. Cloudflare: the `lakehouse.praponb.com` redirect rule and its `AAAA lakehouse` DNS record

@@ -14,6 +14,7 @@ Work through the sections in order: each one removes things the next one depends
 | GCP project | `moukda-lakehouse` (asia-southeast1) |
 | Databricks workspace | `https://8259554454724321.1.gcp.databricks.com` (CLI profile `databricksgcp`) |
 | SQL warehouse | `1525087559b13da2` (Serverless Starter Warehouse) |
+| Cloudflare zone | `praponb.com`, redirect `lakehouse.praponb.com` → dashboard |
 
 ---
 
@@ -31,7 +32,8 @@ Check: `bq ls --project_id=moukda-lakehouse` lists no datasets.
 
 ## 2. Databricks
 
-- [ ] Destroy the bundle: the job `[dev <your-user>] legacy_medallion` (id `470491837537884`) and the
+- [ ] Destroy the bundle: the job `[dev <your-user>] legacy_medallion` (id `470491837537884`), the AI/BI
+      dashboard `[dev <your-user>] Legacy lakehouse overview` (id `01f1cba154791147ba8e74d8e7d22b52`) and the
       workspace files under `/Workspace/Users/<your-user>/.bundle/hadoop_to_lakehouse/dev`
 - [ ] Drop the catalog `legacy_migration_cat` and everything in it (bronze, silver and gold schemas and tables)
 - [ ] Drop the external locations `landing_zone` and `lakehouse_zone`
@@ -101,6 +103,21 @@ rm -rf .venv seed_data
 
 The `bde2020/hadoop-*`, `apache/airflow` and `postgres` base images can be removed with `docker image rm` too,
 if nothing else uses them.
+
+## 7. Cloudflare redirect
+
+`lakehouse.praponb.com` redirects to the dashboard, which section 2 deletes. Afterwards the link leads to a
+Databricks error page, so remove the redirect (or point it somewhere else).
+
+- [ ] Delete the redirect rule *lakehouse to Databricks dashboard* (praponb.com → Rules → Redirect Rules).
+      It matches `http*://lakehouse.praponb.com/*` and sends a 302 to the dashboard's published URL.
+- [ ] Delete the DNS record `AAAA lakehouse → 100::` (proxied) under praponb.com → DNS → Records.
+      It is a placeholder that exists only for the redirect.
+
+Check: `dig +short lakehouse.praponb.com @nataly.ns.cloudflare.com` returns nothing, and
+`curl -sI https://lakehouse.praponb.com` no longer answers with a 302 to Databricks.
+
+To keep the link instead, edit the rule's target URL. A redeployed bundle creates a dashboard with a new id.
 
 ---
 
