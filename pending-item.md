@@ -58,8 +58,8 @@ Add these as implementation notes 12–16 in `SPEC.md`.
 
 ## D. Housekeeping
 
-- [ ] **D1. Commit and push** `README.md`, `trial-end-cleanup.md` and `pending-item.md` to `b_pbv_main`, if wanted.
-      All three are untracked, and the repo is public.
+- [x] **D1. Commit and push** `README.md`, `trial-end-cleanup.md` and `pending-item.md` to `b_pbv_main`, if wanted.
+      Done in commit `0a76445`, pushed to `origin/b_pbv_main`.
 - [ ] **D2. Unused `.env` keys.** No code reads `GCP_REGION`, `BQ_DATASET` or `BQ_CONNECTION`: the region, dataset
       and connection are written out in `bigquery/create_biglake_tables.sql` and `databricks/setup_uc.sql`. Either
       use them, for example a `make bq-setup` target that substitutes them, or drop them from `.env.example`.
