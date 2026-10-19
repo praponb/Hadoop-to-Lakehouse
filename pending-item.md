@@ -49,9 +49,11 @@ Added to `SPEC.md` as implementation notes 12–16, plus an *As implemented* lin
 
 ## C. Not yet tested end to end
 
-- [ ] **C1. A scheduled DAG run.** The full DAG was verified with `airflow dags test … 2026-10-14`, with the DAG
+- [x] **C1. A scheduled DAG run.** The full DAG was verified with `airflow dags test … 2026-10-14`, with the DAG
       paused. Running it through the scheduler means unpausing, which immediately creates a run for the
       latest interval. That needs an HDFS partition for that date, or the sensor waits an hour and fails.
+      Done 2026-10-19: run `scheduled__2026-10-18T00:00:00+00:00` succeeded (15:39–16:00 Bangkok time;
+      audit: Bronze 10,000, Silver 9,187, quarantine 344, 0 duplicate keys, 194 Gold daily rows). DAG paused again.
 - [ ] **C2. Bronze schema-change retry through Airflow.** When a new column appears, the bundle job's
       `max_retries` recovered (tested on day 2). The Airflow path relies on the DAG's `retries: 1`, triggering
       `bronze_ingest` again, which hasn't been exercised.
