@@ -14,16 +14,16 @@ Work on branch `b_pbv_main`. The repo is public, so scan for secrets before push
 
 ## A. Built smaller than the spec's folder-tree comments suggest
 
-Decide for each: build it, or record in SPEC.md that it's intentionally left out.
+All three are intentionally left out, as recorded in `SPEC.md` implementation notes 18–20.
 
-- [ ] **A1. Gold star schema.** The tree comment on `databricks/src/gold_aggregations.py` says
+- [x] **A1. Gold star schema.** The tree comment on `databricks/src/gold_aggregations.py` says
       "Star schema & Liquid Clustering -> Gold". Only the two aggregates that §4.2 defines exist
       (`daily_sales_summary` and `customer_ltv`). There are no dimension or fact tables such as
       `dim_customer`, `dim_product` or `fact_orders`.
-- [ ] **A2. JSON source data.** The tree comment on `hadoop_seed/generate_legacy_data.py` says
+- [x] **A2. JSON source data.** The tree comment on `hadoop_seed/generate_legacy_data.py` says
       "Generates dirty partitioned CSV/JSON data". Only CSV is generated, which matches the §4.1 path
       pattern `orders_part_*.csv`.
-- [ ] **A3. Widget parameter parser.** The tree comment on `databricks/src/common/spark_session.py` says
+- [x] **A3. Widget parameter parser.** The tree comment on `databricks/src/common/spark_session.py` says
       "Spark config & widget parameter parser". Parameters are read with argparse only, with no `dbutils.widgets`.
       Widgets apply only to notebooks; the jobs are `spark_python_task` scripts.
 
