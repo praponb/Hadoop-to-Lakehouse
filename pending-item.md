@@ -29,21 +29,21 @@ Decide for each: build it, or record in SPEC.md that it's intentionally left out
 
 ## B. Deviations not yet documented in SPEC.md
 
-Add these as implementation notes 12–16 in `SPEC.md`.
+Added to `SPEC.md` as implementation notes 12–16, plus an *As implemented* line under the prerequisites for B4.
 
-- [ ] **B4. No BigQuery Admin.** The spec's prerequisites ask for a service account with `Storage Object Admin`
+- [x] **B4. No BigQuery Admin.** The spec's prerequisites ask for a service account with `Storage Object Admin`
       and `BigQuery Admin`. Implemented: `airflow-lakehouse` has only `roles/storage.objectAdmin` on the landing
       bucket. BigQuery reads Gold through the `biglake_gcs` connection, whose service account has
       `roles/storage.objectViewer` on the lakehouse bucket. Add an *As implemented* line under the prerequisites.
-- [ ] **B5. Databricks Runtime 15.4 LTS / 16.x.** Serverless doesn't allow choosing a runtime version.
+- [x] **B5. Databricks Runtime 15.4 LTS / 16.x.** Serverless doesn't allow choosing a runtime version.
       `environment_version: "2"` fixes only Python 3.11; Databricks manages the Spark runtime.
-- [ ] **B6. "2% null customer_ids" (Task 2.1).** The generator follows §4.1 instead ("null or malformed, ~2%"):
+- [x] **B6. "2% null customer_ids" (Task 2.1).** The generator follows §4.1 instead ("null or malformed, ~2%"):
       1.5% null plus 0.5% malformed.
-- [ ] **B7. Folder layout.** The root is `Hadoop-to-Lakehouse/`, not `hadoop-to-databricks-gcp/`. Extra files not in
+- [x] **B7. Folder layout.** The root is `Hadoop-to-Lakehouse/`, not `hadoop-to-databricks-gcp/`. Extra files not in
       the §2 tree: `hadoop.env`, `requirements.txt` (which Task 1.3 requires), `tests/conftest.py`,
       `tests/test_gold_aggregations.py`, `tests/test_hdfs_to_gcs_transfer.py`, `tests/test_dag_integrity.py`,
       `README.md`, `trial-end-cleanup.md` and this file.
-- [ ] **B8. Spec verification commands and timestamp parsing.** The `pytest …` commands need the venv:
+- [x] **B8. Spec verification commands and timestamp parsing.** The `pytest …` commands need the venv:
       `make test` or `.venv/bin/pytest`. Timestamps are parsed with `try_to_timestamp`, not `to_timestamp`.
       The result is the same, but it returns NULL instead of failing when ANSI mode is on.
 

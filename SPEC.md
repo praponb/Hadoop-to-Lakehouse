@@ -170,6 +170,7 @@ Execute each task sequentially. Verify each step with its terminal verification 
 
 - Two GCS buckets in the GCP project (`landing` and `lakehouse`).
 - A GCP Service Account with `Storage Object Admin` and `BigQuery Admin` roles, key saved to `config/gcp-service-account.json`.
+  - *As implemented:* the service account has only `Storage Object Admin` on the landing bucket, with no BigQuery Admin (see note 12).
 - A Databricks Personal Access Token (`Settings -> Developer -> Access tokens`) and the interactive cluster's `cluster_id`.
   - *As implemented:* no cluster is needed. Jobs run on serverless compute; the SQL Warehouse ID goes in `DATABRICKS_WAREHOUSE_ID` (see note 7).
 
@@ -188,3 +189,8 @@ Deliberate deviations from the spec, each made to honour the idempotency guardra
 9. **Extra Silver quality rules:** besides the spec's four, rows are quarantined for malformed `customer_id` (not `C` + 6 digits), unparseable quantity/price/timestamps and unknown statuses. All failed rules are listed in `error_reason`.
 10. **Local tooling:** PySpark 3.5 needs Python ≤ 3.12, so `make venv` builds `.venv` with Python 3.11. Airflow's constraints file pins `pyspark==3.5.2`, so that one line is dropped to honour the spec's `pyspark==3.5.3`.
 11. **Apple-silicon hosts:** the `bde2020` Hadoop images are amd64-only, so `docker-compose.yml` pins `platform: linux/amd64`.
+12. **Least-privilege service account.** `airflow-lakehouse` has only `roles/storage.objectAdmin` on the landing bucket, which is all the HDFS-to-GCS transfer needs. It doesn't get `BigQuery Admin`: BigQuery reads Gold through the `biglake_gcs` connection, whose own service account has `roles/storage.objectViewer` on the lakehouse bucket.
+13. **No runtime version pin.** Serverless compute doesn't let you choose a Databricks Runtime, so the §1 "15.4 LTS or 16.x" can't be pinned. `environment_version: "2"` fixes Python 3.11 only; Databricks manages the Spark runtime.
+14. **Bad `customer_id` split.** Task 2.1 asks for 2% null customer_ids; the generator follows §4.1 ("null or malformed, ~2%") instead: 1.5% blank (NULL in CSV) plus 0.5% malformed. Both kinds are quarantined in Silver (note 9).
+15. **Folder layout.** The repo root is `Hadoop-to-Lakehouse/`, not `hadoop-to-databricks-gcp/`. Files beyond the §2 tree: `hadoop.env`, `requirements.txt` (required by Task 1.3), `tests/conftest.py`, `tests/test_gold_aggregations.py`, `tests/test_hdfs_to_gcs_transfer.py`, `tests/test_dag_integrity.py`, `README.md`, `pending-item.md` and `trial-end-cleanup.md`.
+16. **Verification commands and timestamp parsing.** The `pytest …` commands in §6 need the project venv: run `make test` or `.venv/bin/pytest` (note 10). Timestamps are parsed with `try_to_timestamp` instead of `to_timestamp`: the result is the same, but an unparseable value becomes NULL (and is quarantined) instead of failing the job when ANSI mode is on.
