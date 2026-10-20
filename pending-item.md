@@ -74,7 +74,7 @@ Added to `SPEC.md` as implementation notes 12–16, plus an *As implemented* lin
 
 ## E. Trial-end cleanup
 
-- [ ] **E1. Tear down** the cloud and local resources. The steps, commands and checks are in
+- [x] **E1. Tear down** the cloud and local resources. Done 2026-10-20, 07:03–07:06 Bangkok time. The steps, commands and checks are in
       [`trial-end-cleanup.md`](trial-end-cleanup.md):
   1. BigQuery: dataset `lakehouse_gold` and connection `biglake_gcs`
   2. Databricks: bundle destroy, catalog `legacy_migration_cat`, external locations `landing_zone` and

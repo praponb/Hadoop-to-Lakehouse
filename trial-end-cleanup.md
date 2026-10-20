@@ -1,11 +1,10 @@
 # Trial-end cleanup
 
-Pending teardown of everything the Hadoop-to-Lakehouse trial created. Status as of
-2026-10-14 15:30 Bangkok time: **nothing below has been done yet.**
+Teardown of everything the Hadoop-to-Lakehouse trial created. **Done on 2026-10-20,
+07:03–07:06 Bangkok time**: every section below was run and its check passed.
 
-Nothing is running or scheduled. The Airflow DAG is paused and the Databricks job
-has no schedule, so the only ongoing costs are GCS storage and the idle local
-containers.
+Nothing is left running or billed. The GCP project `moukda-lakehouse` is kept, empty of
+pipeline resources (see *Keep*).
 
 Work through the sections in order: each one removes things the next one depends on.
 
@@ -20,8 +19,8 @@ Work through the sections in order: each one removes things the next one depends
 
 ## 1. BigQuery
 
-- [ ] Delete the dataset `lakehouse_gold` (BigLake tables `daily_sales_summary` and `customer_ltv`)
-- [ ] Delete the connection `biglake_gcs` (this also removes its `bqcx-…` service account)
+- [x] Delete the dataset `lakehouse_gold` (BigLake tables `daily_sales_summary` and `customer_ltv`)
+- [x] Delete the connection `biglake_gcs` (this also removes its `bqcx-…` service account)
 
 ```bash
 bq rm -r -f --dataset moukda-lakehouse:lakehouse_gold
@@ -32,12 +31,12 @@ Check: `bq ls --project_id=moukda-lakehouse` lists no datasets.
 
 ## 2. Databricks
 
-- [ ] Destroy the bundle: the job `[dev <your-user>] legacy_medallion` (id `470491837537884`), the AI/BI
+- [x] Destroy the bundle: the job `[dev <your-user>] legacy_medallion` (id `470491837537884`), the AI/BI
       dashboard `[dev <your-user>] Legacy lakehouse overview` (id `01f1cba154791147ba8e74d8e7d22b52`) and the
       workspace files under `/Workspace/Users/<your-user>/.bundle/hadoop_to_lakehouse/dev`
-- [ ] Drop the catalog `legacy_migration_cat` and everything in it (bronze, silver and gold schemas and tables)
-- [ ] Drop the external locations `landing_zone` and `lakehouse_zone`
-- [ ] Drop the storage credential `lakehouse_gcs_cred` (GCP SA `db-uc-credential-…@uc-asias1.iam.gserviceaccount.com`)
+- [x] Drop the catalog `legacy_migration_cat` and everything in it (bronze, silver and gold schemas and tables)
+- [x] Drop the external locations `landing_zone` and `lakehouse_zone`
+- [x] Drop the storage credential `lakehouse_gcs_cred` (GCP SA `db-uc-credential-…@uc-asias1.iam.gserviceaccount.com`)
 
 ```bash
 cd databricks && env -u DATABRICKS_HOST -u DATABRICKS_TOKEN databricks bundle destroy -t dev --profile databricksgcp
@@ -52,13 +51,17 @@ DROP EXTERNAL LOCATION IF EXISTS lakehouse_zone;
 DROP STORAGE CREDENTIAL IF EXISTS lakehouse_gcs_cred;
 ```
 
+`DROP EXTERNAL LOCATION lakehouse_zone` fails while Unity Catalog still counts the dropped catalog's managed
+tables (kept for its undrop window). Use `DROP EXTERNAL LOCATION IF EXISTS lakehouse_zone FORCE`: it leaves those
+files in `gs://…-uc`, which section 3 deletes with the bucket.
+
 Check: `databricks catalogs list --profile databricksgcp` no longer shows `legacy_migration_cat`, and
 `databricks storage-credentials list --profile databricksgcp` shows only the Databricks-managed credential.
 
 ## 3. Google Cloud Storage
 
-- [ ] Delete `gs://moukda-lakehouse-landing` (landing CSVs)
-- [ ] Delete `gs://moukda-lakehouse-uc` (managed tables, Gold Delta files, Auto Loader schemas and checkpoints)
+- [x] Delete `gs://moukda-lakehouse-landing` (landing CSVs)
+- [x] Delete `gs://moukda-lakehouse-uc` (managed tables, Gold Delta files, Auto Loader schemas and checkpoints)
 
 ```bash
 gcloud storage rm -r gs://moukda-lakehouse-landing gs://moukda-lakehouse-uc
@@ -71,9 +74,9 @@ Check: `gcloud storage buckets list --project=moukda-lakehouse` lists nothing.
 
 ## 4. Service account and key
 
-- [ ] Delete the service account `airflow-lakehouse@moukda-lakehouse.iam.gserviceaccount.com`. This also deletes
+- [x] Delete the service account `airflow-lakehouse@moukda-lakehouse.iam.gserviceaccount.com`. This also deletes
       its JSON key, id `69733a77480e78da901db5d4decbc31271d76201`.
-- [ ] Delete the local key file `config/gcp-service-account.json`
+- [x] Delete the local key file `config/gcp-service-account.json`
 
 ```bash
 gcloud iam service-accounts delete airflow-lakehouse@moukda-lakehouse.iam.gserviceaccount.com --project=moukda-lakehouse --quiet
@@ -84,16 +87,16 @@ Check: `gcloud iam service-accounts list --project=moukda-lakehouse` shows only 
 
 ## 5. Databricks access token
 
-- [ ] Revoke the PAT used by `.env` and the `databricksgcp` profile (comment `moukda-lakehouse`, created
+- [x] Revoke the PAT used by `.env` and the `databricksgcp` profile (comment `moukda-lakehouse`, created
       2026-10-14 11:57 Bangkok time, expires 2026-10-28) under Settings → Developer → Access tokens
-- [ ] Remove `DATABRICKS_TOKEN` from `.env`, and the token from the `databricksgcp` profile in `~/.databrickscfg`
+- [x] Remove `DATABRICKS_TOKEN` from `.env`, and the token from the `databricksgcp` profile in `~/.databrickscfg`
 
 Do this after section 2, because the bundle destroy and the SQL statements need the token.
 
 ## 6. Local machine
 
-- [ ] Stop the stack and delete its volumes (HDFS data, Airflow metadata DB, logs)
-- [ ] Optionally remove the custom Airflow image, the Python venv and the generated data
+- [x] Stop the stack and delete its volumes (HDFS data, Airflow metadata DB, logs)
+- [x] Optionally remove the custom Airflow image, the Python venv and the generated data
 
 ```bash
 docker compose down -v
@@ -109,9 +112,9 @@ if nothing else uses them.
 `lakehouse.praponb.com` redirects to the dashboard, which section 2 deletes. Afterwards the link leads to a
 Databricks error page, so remove the redirect (or point it somewhere else).
 
-- [ ] Delete the redirect rule *lakehouse to Databricks dashboard* (praponb.com → Rules → Redirect Rules).
+- [x] Delete the redirect rule *lakehouse to Databricks dashboard* (praponb.com → Rules → Redirect Rules).
       It matches `http*://lakehouse.praponb.com/*` and sends a 302 to the dashboard's published URL.
-- [ ] Delete the DNS record `AAAA lakehouse → 100::` (proxied) under praponb.com → DNS → Records.
+- [x] Delete the DNS record `AAAA lakehouse → 100::` (proxied) under praponb.com → DNS → Records.
       It is a placeholder that exists only for the redirect.
 
 Check: `dig +short lakehouse.praponb.com @nataly.ns.cloudflare.com` returns nothing, and
