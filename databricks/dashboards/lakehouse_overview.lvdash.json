@@ -1,0 +1,991 @@
+{
+  "datasets": [
+    {
+      "name": "kpis",
+      "displayName": "Sales KPIs",
+      "queryLines": [
+        "SELECT\n",
+        "  SUM(net_revenue) AS net_revenue,\n",
+        "  SUM(total_orders) AS total_orders,\n",
+        "  SUM(cancellation_rate * total_orders) / SUM(total_orders) AS cancellation_rate,\n",
+        "  (SELECT COUNT(*) FROM legacy_migration_cat.gold.customer_ltv) AS customers\n",
+        "FROM legacy_migration_cat.gold.daily_sales_summary"
+      ]
+    },
+    {
+      "name": "daily_totals",
+      "displayName": "Daily totals",
+      "queryLines": [
+        "SELECT\n",
+        "  order_date,\n",
+        "  SUM(net_revenue) AS net_revenue,\n",
+        "  SUM(total_orders) AS total_orders,\n",
+        "  SUM(cancellation_rate * total_orders) / SUM(total_orders) AS cancellation_rate\n",
+        "FROM legacy_migration_cat.gold.daily_sales_summary\n",
+        "GROUP BY order_date"
+      ]
+    },
+    {
+      "name": "top_skus",
+      "displayName": "Top SKUs",
+      "queryLines": [
+        "SELECT product_sku, SUM(net_revenue) AS net_revenue\n",
+        "FROM legacy_migration_cat.gold.daily_sales_summary\n",
+        "GROUP BY product_sku\n",
+        "ORDER BY net_revenue DESC\n",
+        "LIMIT 10"
+      ]
+    },
+    {
+      "name": "ltv_bands",
+      "displayName": "Customer spend bands",
+      "queryLines": [
+        "SELECT band, sort_key, COUNT(*) AS customers\n",
+        "FROM (\n",
+        "  SELECT\n",
+        "    CASE WHEN lifetime_spend < 2500 THEN 'Under 2.5k'\n",
+        "         WHEN lifetime_spend < 5000 THEN '2.5k-5k'\n",
+        "         WHEN lifetime_spend < 10000 THEN '5k-10k'\n",
+        "         WHEN lifetime_spend < 15000 THEN '10k-15k'\n",
+        "         ELSE '15k and over' END AS band,\n",
+        "    CASE WHEN lifetime_spend < 2500 THEN 1\n",
+        "         WHEN lifetime_spend < 5000 THEN 2\n",
+        "         WHEN lifetime_spend < 10000 THEN 3\n",
+        "         WHEN lifetime_spend < 15000 THEN 4\n",
+        "         ELSE 5 END AS sort_key\n",
+        "  FROM legacy_migration_cat.gold.customer_ltv\n",
+        ")\n",
+        "GROUP BY band, sort_key"
+      ]
+    },
+    {
+      "name": "top_customers",
+      "displayName": "Top customers",
+      "queryLines": [
+        "SELECT customer_id, lifetime_spend, lifetime_orders\n",
+        "FROM legacy_migration_cat.gold.customer_ltv\n",
+        "ORDER BY lifetime_spend DESC\n",
+        "LIMIT 10"
+      ]
+    },
+    {
+      "name": "quality_kpis",
+      "displayName": "Quality KPIs",
+      "queryLines": [
+        "SELECT\n",
+        "  (SELECT COUNT(*) FROM legacy_migration_cat.bronze.orders_raw) AS bronze_rows,\n",
+        "  (SELECT COUNT(*) FROM legacy_migration_cat.silver.orders_cleansed) AS silver_rows,\n",
+        "  (SELECT COUNT(*) FROM legacy_migration_cat.silver.orders_quarantine) AS quarantine_rows,\n",
+        "  (SELECT COUNT(*) FROM legacy_migration_cat.silver.orders_quarantine) / (SELECT COUNT(*) FROM legacy_migration_cat.bronze.orders_raw) AS quarantine_rate"
+      ]
+    },
+    {
+      "name": "batch_rows",
+      "displayName": "Rows per batch",
+      "queryLines": [
+        "SELECT batch_date, stage, rows FROM (\n",
+        "  SELECT batch_date, '1 Bronze' AS stage, COUNT(*) AS rows FROM legacy_migration_cat.bronze.orders_raw GROUP BY batch_date\n",
+        "  UNION ALL\n",
+        "  SELECT _batch_date, '2 Silver', COUNT(*) FROM legacy_migration_cat.silver.orders_cleansed GROUP BY _batch_date\n",
+        "  UNION ALL\n",
+        "  SELECT batch_date, '3 Quarantine', COUNT(*) FROM legacy_migration_cat.silver.orders_quarantine GROUP BY batch_date\n",
+        ")"
+      ]
+    },
+    {
+      "name": "quarantine_reasons",
+      "displayName": "Quarantine reasons",
+      "queryLines": [
+        "SELECT reason, COUNT(*) AS rows\n",
+        "FROM legacy_migration_cat.silver.orders_quarantine\n",
+        "LATERAL VIEW explode(split(error_reason, '; ')) r AS reason\n",
+        "GROUP BY reason"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "sales",
+      "displayName": "Sales",
+      "layout": [
+        {
+          "widget": {
+            "name": "sales_intro",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Sales from the Gold layer\n",
+                "\n",
+                "Legacy ERP orders after Bronze → Silver → Gold. Net revenue excludes cancelled orders."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_net_revenue",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpis",
+                  "fields": [
+                    {
+                      "name": "net_revenue",
+                      "expression": "`net_revenue`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "net_revenue",
+                  "displayName": "Net revenue",
+                  "format": {
+                    "type": "number-currency",
+                    "currencyCode": "USD",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Net revenue"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_orders",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpis",
+                  "fields": [
+                    {
+                      "name": "total_orders",
+                      "expression": "`total_orders`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "total_orders",
+                  "displayName": "Orders",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Orders"
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 2,
+            "width": 1,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_cancellation",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpis",
+                  "fields": [
+                    {
+                      "name": "cancellation_rate",
+                      "expression": "`cancellation_rate`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "cancellation_rate",
+                  "displayName": "Cancellation rate",
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Cancellation rate"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 2,
+            "width": 1,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_customers",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpis",
+                  "fields": [
+                    {
+                      "name": "customers",
+                      "expression": "`customers`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "customers",
+                  "displayName": "Customers",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Customers"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "net_revenue_by_day",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "daily_totals",
+                  "fields": [
+                    {
+                      "name": "order_date",
+                      "expression": "`order_date`"
+                    },
+                    {
+                      "name": "net_revenue",
+                      "expression": "`net_revenue`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "order_date",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "natural-order"
+                    }
+                  },
+                  "displayName": "Order date"
+                },
+                "y": {
+                  "fieldName": "net_revenue",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Net revenue",
+                  "format": {
+                    "type": "number-currency",
+                    "currencyCode": "USD",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Net revenue by order date",
+                "showDescription": true,
+                "description": "Small days hold only orders whose timestamps fall outside a batch day"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "orders_by_day",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "daily_totals",
+                  "fields": [
+                    {
+                      "name": "order_date",
+                      "expression": "`order_date`"
+                    },
+                    {
+                      "name": "total_orders",
+                      "expression": "`total_orders`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "order_date",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "natural-order"
+                    }
+                  },
+                  "displayName": "Order date"
+                },
+                "y": {
+                  "fieldName": "total_orders",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Orders",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Orders by order date",
+                "showDescription": true,
+                "description": "Each batch day holds about 9,000 orders"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 5,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "top_skus",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "top_skus",
+                  "fields": [
+                    {
+                      "name": "product_sku",
+                      "expression": "`product_sku`"
+                    },
+                    {
+                      "name": "net_revenue",
+                      "expression": "`net_revenue`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "net_revenue",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Net revenue",
+                  "format": {
+                    "type": "number-currency",
+                    "currencyCode": "USD",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "product_sku",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  },
+                  "displayName": "SKU"
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Top 10 SKUs by net revenue"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 11,
+            "width": 3,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "ltv_bands",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ltv_bands",
+                  "fields": [
+                    {
+                      "name": "band",
+                      "expression": "`band`"
+                    },
+                    {
+                      "name": "customers",
+                      "expression": "`customers`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "customers",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Customers",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "band",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "custom-order",
+                      "orderedValues": [
+                        "Under 2.5k",
+                        "2.5k-5k",
+                        "5k-10k",
+                        "10k-15k",
+                        "15k and over"
+                      ]
+                    }
+                  },
+                  "displayName": "Lifetime spend (USD)"
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Customers by lifetime spend"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 11,
+            "width": 3,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "top_customers",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "top_customers",
+                  "fields": [
+                    {
+                      "name": "customer_id",
+                      "expression": "`customer_id`"
+                    },
+                    {
+                      "name": "lifetime_spend",
+                      "expression": "`lifetime_spend`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "lifetime_spend",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Lifetime spend",
+                  "format": {
+                    "type": "number-currency",
+                    "currencyCode": "USD",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "customer_id",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  },
+                  "displayName": "Customer"
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Top 10 customers by lifetime spend",
+                "showDescription": true,
+                "description": "From gold.customer_ltv"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 18,
+            "width": 6,
+            "height": 7
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
+    },
+    {
+      "name": "data_quality",
+      "displayName": "Data quality",
+      "layout": [
+        {
+          "widget": {
+            "name": "quality_intro",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Pipeline data quality\n",
+                "\n",
+                "Rows at each layer per batch, and why rows were quarantined in Silver."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "q_bronze",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "quality_kpis",
+                  "fields": [
+                    {
+                      "name": "bronze_rows",
+                      "expression": "`bronze_rows`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "bronze_rows",
+                  "displayName": "Bronze rows",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Bronze rows"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "q_silver",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "quality_kpis",
+                  "fields": [
+                    {
+                      "name": "silver_rows",
+                      "expression": "`silver_rows`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "silver_rows",
+                  "displayName": "Silver rows (deduplicated)",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Silver rows (deduplicated)"
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "q_rate",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "quality_kpis",
+                  "fields": [
+                    {
+                      "name": "quarantine_rate",
+                      "expression": "`quarantine_rate`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "quarantine_rate",
+                  "displayName": "Quarantined share of Bronze",
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Quarantined share of Bronze"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "rows_per_batch",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "batch_rows",
+                  "fields": [
+                    {
+                      "name": "batch_date",
+                      "expression": "`batch_date`"
+                    },
+                    {
+                      "name": "stage",
+                      "expression": "`stage`"
+                    },
+                    {
+                      "name": "rows",
+                      "expression": "`rows`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "batch_date",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Batch date"
+                },
+                "y": {
+                  "fieldName": "rows",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Rows",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                },
+                "color": {
+                  "fieldName": "stage",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Layer"
+                }
+              },
+              "mark": {
+                "layout": "group"
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Rows per batch by layer",
+                "showDescription": true,
+                "description": "Silver counts rows last touched by that batch"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 4,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "quarantine_reasons",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "quarantine_reasons",
+                  "fields": [
+                    {
+                      "name": "reason",
+                      "expression": "`reason`"
+                    },
+                    {
+                      "name": "rows",
+                      "expression": "`rows`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "rows",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Rows",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "reason",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  },
+                  "displayName": "Rule"
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Quarantine reasons",
+                "showDescription": true,
+                "description": "A row can fail more than one rule"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 5,
+            "width": 2,
+            "height": 7
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
+    }
+  ]
+}

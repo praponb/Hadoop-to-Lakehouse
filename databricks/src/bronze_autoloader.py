@@ -8,8 +8,8 @@ With schemaEvolutionMode=addNewColumns, a new column (day 2's discount_code)
 stops the stream with UnknownFieldException after recording the new schema.
 Databricks fails the whole task when any stream stops with an error, even if
 the script catches it, so the restart is left to a task retry: max_retries on
-bronze_ingest in databricks.yml, and the Airflow task's retries. The retried
-run reads the evolved schema and carries on from the checkpoint.
+bronze_ingest in databricks.yml, which also applies when Airflow starts the job.
+The retried run reads the evolved schema and carries on from the checkpoint.
 """
 from __future__ import annotations
 

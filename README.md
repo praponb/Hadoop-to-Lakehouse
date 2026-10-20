@@ -9,17 +9,86 @@ HDFS and Airflow run locally in Docker to save trial credits. GCS, Databricks (s
 the real cloud services. The full specification is in [`SPEC.md`](SPEC.md), transcribed from `spec.docx`, with
 implementation notes on every deviation.
 
+## Project overview
+
+### The scenario
+
+A company keeps its ERP order history on an on-premises **Hadoop** cluster: every day a batch job dumps that day's
+orders into HDFS as CSV files, one folder per day. The dumps are messy (duplicates, missing customer IDs, mixed
+timestamp formats, late status changes, and a new column that appears one day). The company wants that data in a
+cloud **lakehouse** where it is cleaned once, kept as reliable tables, and queried by both data engineers
+(Databricks) and analysts (BigQuery), without switching the legacy system off on day one.
+
+This project builds that migration path as a daily pipeline: each day's HDFS folder is copied to Google Cloud,
+refined by Databricks into Bronze → Silver → Gold Delta tables, and exposed to BigQuery, with Airflow running the
+steps in order and checking the result.
+
+### How each technology is used
+
+| Technology | Where it runs | What it does in this project |
+|---|---|---|
+| **Hadoop HDFS** 3.2.1 | Local Docker: one NameNode + one DataNode (`bde2020` images, replication 1) | Plays the legacy source system. Generated CSVs are loaded under `/legacy/erp/orders/ingest_date=YYYY-MM-DD/`. Nothing in the pipeline uses Hadoop compute (no MapReduce, Hive or YARN): HDFS is only read, over its **WebHDFS** REST API on port 9870. |
+| **Apache Airflow** 2.10 | Local Docker (LocalExecutor + Postgres) | The orchestrator. One daily DAG waits for the day's HDFS folder, copies it to GCS, triggers the three Databricks steps and audits row counts. |
+| **Google Cloud Storage** | GCP project `moukda-lakehouse`, `asia-southeast1` | Two buckets. **Landing** receives the raw CSVs copied from HDFS. **Lakehouse** holds everything Databricks writes: the Delta files of every table, Auto Loader's schema and checkpoint folders, and the Gold tables that BigQuery reads. |
+| **GCP IAM** | Same project | Three identities, each with only the access it needs (see below). No identity has project-wide admin roles. |
+| **Databricks on GCP** | Databricks workspace in GCP, serverless compute | The processing engine. PySpark jobs build the medallion layers; **Unity Catalog** governs the tables and their GCS locations; **Auto Loader** picks up new landing files; a **SQL warehouse** serves the audit and the dashboard; an **Asset Bundle** deploys the job and the dashboard from this repo. |
+| **Delta Lake** | Files in the lakehouse bucket | The table format for every layer: ACID writes, `MERGE` for upserts, schema evolution, and liquid clustering on Gold. |
+| **BigQuery** | Same GCP project | Analysts' SQL access to Gold. BigLake tables read the Gold Delta files in place through a `CLOUD_RESOURCE` connection, so no data is copied and each Gold rebuild is visible immediately. |
+| **AI/BI dashboard** | Databricks | "Legacy lakehouse overview": a Sales page over Gold and a Data quality page over Bronze and Silver. |
+
+### One day's data, end to end
+
+1. **Generate and load (Hadoop).** `generate_legacy_data.py` writes about 10,000 dirty order rows for a date;
+   `load_to_hdfs.sh` copies it into the NameNode container and replaces that date's HDFS folder with `hdfs dfs -put`.
+2. **Wait for the data (Airflow → Hadoop).** `verify_hdfs_partition` calls WebHDFS `LISTSTATUS` until the folder
+   for `{{ ds }}` exists.
+3. **Copy to the cloud (Hadoop → GCP).** `distcp_hdfs_to_gcs` streams each file from WebHDFS straight into a GCS
+   resumable upload in 8 MiB chunks, without touching local disk, and fails if the MD5 that GCS computes differs
+   from the bytes read from HDFS.
+4. **Bronze (Databricks).** Auto Loader ingests only files it has not seen before, infers the column types, and
+   tags each row with its source file and `batch_date`. A new column stops the stream once; the job's retry
+   picks up the evolved schema.
+5. **Silver (Databricks).** Rows are typed and cleaned. Rows that break a rule go to `orders_quarantine` with the
+   reasons; valid rows are deduplicated to the latest `updated_at` and `MERGE`d into `orders_cleansed`.
+6. **Gold (Databricks).** `daily_sales_summary` and `customer_ltv` are rebuilt from Silver and written as external
+   Delta tables in the lakehouse bucket.
+7. **Audit (Airflow → Databricks SQL).** Checks Bronze ≥ Silver + quarantine, no duplicate order IDs in Silver and
+   a non-empty Gold for the day.
+8. **Query (BigQuery, dashboard).** BigQuery's BigLake tables and the AI/BI dashboard read the new Gold straight away.
+
+Every step can be re-run for the same date without duplicating data, which is what makes daily reruns and
+backfills safe.
+
+### What was created on GCP and Databricks
+
+| Resource | Purpose |
+|---|---|
+| GCP project `moukda-lakehouse` (`asia-southeast1`) | Holds the buckets, BigQuery and the IAM identities |
+| `gs://moukda-lakehouse-landing` | Raw CSVs from HDFS, under `erp/orders/ingest_date=…/` |
+| `gs://moukda-lakehouse-uc` | Unity Catalog storage: managed Bronze and Silver tables, external Gold tables, Auto Loader state |
+| Service account `airflow-lakehouse` | Airflow's identity for the copy step: `storage.objectAdmin` on the landing bucket only |
+| Databricks storage credential `lakehouse_gcs_cred` | A Databricks-managed GCP service account with read/write on both buckets, used through the external locations `landing_zone` and `lakehouse_zone` |
+| BigQuery connection `biglake_gcs` + dataset `lakehouse_gold` | The connection's service account has `storage.objectViewer` on the lakehouse bucket only; the dataset holds the BigLake tables over Gold |
+| Unity Catalog catalog `legacy_migration_cat` | Schemas `bronze`, `silver`, `gold` |
+| Bundle job `legacy_medallion`, SQL warehouse, AI/BI dashboard | Processing, the audit query and the dashboard |
+
 ## Status
 
-Every requirement in the spec is implemented and has been run against the live services:
+Every requirement in the spec is implemented and was run against the live services:
 
-- Two batch days, including the day-2 schema change (a new `discount_code` column)
+- Four batch days (2026-10-14, -15, -16 and -18), including the day-2 schema change (a new `discount_code` column)
+  and a second schema change on 2026-10-16 (`sales_channel`) recovered by the Bronze task's retry
 - Idempotent re-runs: re-running a date leaves every table's fingerprint unchanged
 - BigQuery totals that match Databricks Gold exactly
-- A full Airflow DAG run, from the HDFS sensor through to the row-count audit
+- Airflow DAG runs from the HDFS sensor through to the row-count audit, both with `airflow dags test` and through
+  the scheduler
+- The AI/BI dashboard over Gold, Bronze and Silver
 - 52 local tests passing
 
-Open items are tracked in [`pending-item.md`](pending-item.md), and teardown steps in [`trial-end-cleanup.md`](trial-end-cleanup.md).
+**The cloud resources were torn down on 2026-10-20** at the end of the trial, following
+[`trial-end-cleanup.md`](trial-end-cleanup.md); the GCP project itself is kept, empty. Everything needed to
+rebuild the pipeline is in this repo (see [Getting started](#getting-started)). The work log is in
+[`pending-item.md`](pending-item.md), where every item is closed.
 
 ## Architecture
 
@@ -35,6 +104,7 @@ flowchart LR
     end
     subgraph dbx["Databricks (serverless, Unity Catalog)"]
         bronze["Bronze<br/>bronze.orders_raw<br/>Auto Loader"] --> silver["Silver<br/>orders_cleansed + orders_quarantine<br/>cleanse · dedupe · MERGE"] --> gold["Gold (external, liquid-clustered)<br/>daily_sales_summary · customer_ltv"]
+        gold --> dash["AI/BI dashboard<br/>Legacy lakehouse overview"]
     end
     hdfs -- "WebHDFS stream + MD5 check<br/>(HdfsToGcsBridge)" --> landing
     landing --> bronze
@@ -82,7 +152,8 @@ The Databricks steps use `DatabricksRunNowOperator` on the deployed Asset Bundle
 | `hadoop_seed/load_to_hdfs.sh` | Loads generated partitions into HDFS, replacing each partition |
 | `airflow/plugins/hdfs_to_gcs_transfer.py` | `HdfsToGcsBridge`: streams from WebHDFS to GCS and returns a manifest (`files_transferred`, `total_bytes`, `md5_hashes`) |
 | `airflow/dags/hadoop_to_lakehouse_dag.py` | The DAG |
-| `databricks/databricks.yml` | Asset Bundle: job `legacy_medallion`, `bronze_ingest → silver_upsert → gold_aggregate`, serverless with `STANDARD` performance target |
+| `databricks/databricks.yml` | Asset Bundle: job `legacy_medallion`, `bronze_ingest → silver_upsert → gold_aggregate`, serverless with `STANDARD` performance target; dashboard `lakehouse_overview` |
+| `databricks/dashboards/lakehouse_overview.lvdash.json` | AI/BI dashboard: a Sales page over Gold and a Data quality page over Bronze and Silver |
 | `databricks/setup_uc.sql` | Unity Catalog setup: external locations, catalog, schemas, Silver and Gold tables |
 | `databricks/src/` | `bronze_autoloader.py`, `silver_transform.py`, `gold_aggregations.py`, `common/spark_session.py` |
 | `bigquery/create_biglake_tables.sql` | BigLake `DELTA_LAKE` tables over Gold |
@@ -137,7 +208,8 @@ make hdfs-ls
    both buckets, and run [`databricks/setup_uc.sql`](databricks/setup_uc.sql) on the SQL warehouse.
 4. **Bundle:** `make bundle-validate` and `make bundle-deploy`. These use the CLI profile in
    `DATABRICKS_PROFILE`, `databricksgcp` by default. Put the deployed job's ID in `.env` as `DATABRICKS_JOB_ID`,
-   then run `docker compose up -d` to reload Airflow.
+   then run `docker compose up -d` to reload Airflow. The deploy also publishes the AI/BI dashboard
+   "Legacy lakehouse overview", which runs on the SQL warehouse in the bundle's `warehouse_id` variable.
 5. **BigQuery:** create a `CLOUD_RESOURCE` connection, grant its service account `roles/storage.objectViewer` on the
    lakehouse bucket, then run [`bigquery/create_biglake_tables.sql`](bigquery/create_biglake_tables.sql).
 
@@ -170,7 +242,6 @@ that date's partition exists in HDFS first.
 | `DATABRICKS_JOB_ID` | DAG | ID of the deployed bundle job |
 | `DATABRICKS_WAREHOUSE_ID` | DAG audit | SQL warehouse for the row-count audit |
 | `AIRFLOW_UID` | compose | Container user |
-| `GCP_REGION`, `BQ_DATASET`, `BQ_CONNECTION` | *(not read yet)* | Reference values; the SQL files write them out directly |
 
 Airflow connections come from `AIRFLOW_CONN_*` variables in `docker-compose.yml`. Secrets live only in
 `.env` and `config/`, which are both git-ignored.
@@ -199,6 +270,7 @@ These are explained in full in the [`SPEC.md` implementation notes](SPEC.md#impl
 
 ## Cost and cleanup
 
-With the DAG paused and the bundle job unscheduled, nothing runs on its own. The only ongoing costs are
-GCS storage and the idle local containers. To tear everything down, follow
-[`trial-end-cleanup.md`](trial-end-cleanup.md) in order.
+While deployed, nothing runs on its own: the DAG is paused and the bundle job has no schedule, so the only
+ongoing costs are GCS storage and the SQL warehouse while the dashboard or the audit queries it. To tear
+everything down, follow [`trial-end-cleanup.md`](trial-end-cleanup.md) in order. This project's resources were
+removed that way on 2026-10-20.

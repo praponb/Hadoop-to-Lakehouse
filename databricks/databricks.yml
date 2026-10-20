@@ -14,8 +14,18 @@ variables:
     default: gs://moukda-lakehouse-landing
   lakehouse_path:
     default: gs://moukda-lakehouse-uc
+  warehouse_id:
+    description: SQL Warehouse that runs the dashboard queries (DATABRICKS_WAREHOUSE_ID in .env)
+    default: 1525087559b13da2
 
 resources:
+  dashboards:
+    # AI/BI dashboard over Gold (sales) and Bronze/Silver (data quality)
+    lakehouse_overview:
+      display_name: Legacy lakehouse overview
+      file_path: ./dashboards/lakehouse_overview.lvdash.json
+      warehouse_id: ${var.warehouse_id}
+
   jobs:
     legacy_medallion:
       name: legacy_medallion

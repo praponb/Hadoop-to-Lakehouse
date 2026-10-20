@@ -2,9 +2,9 @@
 -- BigQuery reads the Delta log at query time, so each Gold rebuild shows up
 -- without recreating these tables.
 --
--- Values match .env.example: project moukda-lakehouse, region asia-southeast1,
--- lakehouse bucket gs://moukda-lakehouse-uc, dataset lakehouse_gold,
--- connection biglake_gcs.
+-- Project moukda-lakehouse and lakehouse bucket gs://moukda-lakehouse-uc match
+-- .env.example. The region asia-southeast1, dataset lakehouse_gold and
+-- connection biglake_gcs are set only here.
 --
 -- One-time setup (shell):
 --   bq mk --connection --location=asia-southeast1 --project_id=moukda-lakehouse \
