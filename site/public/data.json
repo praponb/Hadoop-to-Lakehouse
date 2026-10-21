@@ -1,0 +1,390 @@
+{
+ "snapshot_at": "2026-10-21T11:04+07:00",
+ "pipeline_tasks": [
+  {
+   "batch_date": "2026-10-14",
+   "task": "verify_hdfs_partition",
+   "started": "2026-10-21T09:43:49+07:00",
+   "minutes": 0.03
+  },
+  {
+   "batch_date": "2026-10-14",
+   "task": "distcp_hdfs_to_gcs",
+   "started": "2026-10-21T09:43:51+07:00",
+   "minutes": 0.08
+  },
+  {
+   "batch_date": "2026-10-14",
+   "task": "run_databricks_bronze",
+   "started": "2026-10-21T09:43:56+07:00",
+   "minutes": 6.16
+  },
+  {
+   "batch_date": "2026-10-14",
+   "task": "run_databricks_silver",
+   "started": "2026-10-21T09:50:06+07:00",
+   "minutes": 6.65
+  },
+  {
+   "batch_date": "2026-10-14",
+   "task": "run_databricks_gold",
+   "started": "2026-10-21T09:56:45+07:00",
+   "minutes": 7.17
+  },
+  {
+   "batch_date": "2026-10-14",
+   "task": "audit_row_counts",
+   "started": "2026-10-21T10:03:55+07:00",
+   "minutes": 0.18
+  },
+  {
+   "batch_date": "2026-10-15",
+   "task": "verify_hdfs_partition",
+   "started": "2026-10-21T10:04:07+07:00",
+   "minutes": 0.0
+  },
+  {
+   "batch_date": "2026-10-15",
+   "task": "distcp_hdfs_to_gcs",
+   "started": "2026-10-21T10:04:07+07:00",
+   "minutes": 0.02
+  },
+  {
+   "batch_date": "2026-10-15",
+   "task": "run_databricks_bronze",
+   "started": "2026-10-21T10:04:09+07:00",
+   "minutes": 6.66
+  },
+  {
+   "batch_date": "2026-10-15",
+   "task": "run_databricks_silver",
+   "started": "2026-10-21T10:10:49+07:00",
+   "minutes": 5.63
+  },
+  {
+   "batch_date": "2026-10-15",
+   "task": "run_databricks_gold",
+   "started": "2026-10-21T10:16:26+07:00",
+   "minutes": 7.73
+  },
+  {
+   "batch_date": "2026-10-15",
+   "task": "audit_row_counts",
+   "started": "2026-10-21T10:24:10+07:00",
+   "minutes": 0.19
+  },
+  {
+   "batch_date": "2026-10-16",
+   "task": "verify_hdfs_partition",
+   "started": "2026-10-21T10:24:23+07:00",
+   "minutes": 0.0
+  },
+  {
+   "batch_date": "2026-10-16",
+   "task": "distcp_hdfs_to_gcs",
+   "started": "2026-10-21T10:24:24+07:00",
+   "minutes": 0.03
+  },
+  {
+   "batch_date": "2026-10-16",
+   "task": "run_databricks_bronze",
+   "started": "2026-10-21T10:24:25+07:00",
+   "minutes": 6.67
+  },
+  {
+   "batch_date": "2026-10-16",
+   "task": "run_databricks_silver",
+   "started": "2026-10-21T10:31:05+07:00",
+   "minutes": 6.66
+  },
+  {
+   "batch_date": "2026-10-16",
+   "task": "run_databricks_gold",
+   "started": "2026-10-21T10:37:45+07:00",
+   "minutes": 7.17
+  },
+  {
+   "batch_date": "2026-10-16",
+   "task": "audit_row_counts",
+   "started": "2026-10-21T10:44:55+07:00",
+   "minutes": 0.16
+  },
+  {
+   "batch_date": "2026-10-17",
+   "task": "verify_hdfs_partition",
+   "started": "2026-10-21T10:45:07+07:00",
+   "minutes": 0.0
+  },
+  {
+   "batch_date": "2026-10-17",
+   "task": "distcp_hdfs_to_gcs",
+   "started": "2026-10-21T10:45:07+07:00",
+   "minutes": 0.02
+  },
+  {
+   "batch_date": "2026-10-17",
+   "task": "run_databricks_bronze",
+   "started": "2026-10-21T10:45:08+07:00",
+   "minutes": 7.16
+  },
+  {
+   "batch_date": "2026-10-17",
+   "task": "run_databricks_silver",
+   "started": "2026-10-21T10:52:18+07:00",
+   "minutes": 5.64
+  },
+  {
+   "batch_date": "2026-10-17",
+   "task": "run_databricks_gold",
+   "started": "2026-10-21T10:57:57+07:00",
+   "minutes": 6.15
+  },
+  {
+   "batch_date": "2026-10-17",
+   "task": "audit_row_counts",
+   "started": "2026-10-21T11:04:06+07:00",
+   "minutes": 0.07
+  }
+ ],
+ "batch_audit": [
+  {
+   "batch_date": "2026-10-14",
+   "bronze": 10000,
+   "silver": 9189,
+   "quarantine": 344,
+   "silver_dup_keys": 0,
+   "gold_daily_rows": 78
+  },
+  {
+   "batch_date": "2026-10-15",
+   "bronze": 10000,
+   "silver": 9181,
+   "quarantine": 345,
+   "silver_dup_keys": 0,
+   "gold_daily_rows": 118
+  },
+  {
+   "batch_date": "2026-10-16",
+   "bronze": 10000,
+   "silver": 9192,
+   "quarantine": 348,
+   "silver_dup_keys": 0,
+   "gold_daily_rows": 158
+  },
+  {
+   "batch_date": "2026-10-17",
+   "bronze": 10000,
+   "silver": 9190,
+   "quarantine": 347,
+   "silver_dup_keys": 0,
+   "gold_daily_rows": 198
+  }
+ ],
+ "file_copies": [
+  {
+   "file": "ingest_date=2026-10-14/orders_part_0.csv",
+   "batch_date": "2026-10-14",
+   "rows": 5000,
+   "hdfs_bytes": 470557,
+   "gcs_bytes": 470557,
+   "match": true
+  },
+  {
+   "file": "ingest_date=2026-10-14/orders_part_1.csv",
+   "batch_date": "2026-10-14",
+   "rows": 5000,
+   "hdfs_bytes": 470648,
+   "gcs_bytes": 470648,
+   "match": true
+  },
+  {
+   "file": "ingest_date=2026-10-15/orders_part_0.csv",
+   "batch_date": "2026-10-15",
+   "rows": 5000,
+   "hdfs_bytes": 486698,
+   "gcs_bytes": 486698,
+   "match": true
+  },
+  {
+   "file": "ingest_date=2026-10-15/orders_part_1.csv",
+   "batch_date": "2026-10-15",
+   "rows": 5000,
+   "hdfs_bytes": 486660,
+   "gcs_bytes": 486660,
+   "match": true
+  },
+  {
+   "file": "ingest_date=2026-10-16/orders_part_0.csv",
+   "batch_date": "2026-10-16",
+   "rows": 5000,
+   "hdfs_bytes": 486638,
+   "gcs_bytes": 486638,
+   "match": true
+  },
+  {
+   "file": "ingest_date=2026-10-16/orders_part_1.csv",
+   "batch_date": "2026-10-16",
+   "rows": 5000,
+   "hdfs_bytes": 486591,
+   "gcs_bytes": 486591,
+   "match": true
+  },
+  {
+   "file": "ingest_date=2026-10-17/orders_part_0.csv",
+   "batch_date": "2026-10-17",
+   "rows": 5000,
+   "hdfs_bytes": 486548,
+   "gcs_bytes": 486548,
+   "match": true
+  },
+  {
+   "file": "ingest_date=2026-10-17/orders_part_1.csv",
+   "batch_date": "2026-10-17",
+   "rows": 5000,
+   "hdfs_bytes": 487159,
+   "gcs_bytes": 487159,
+   "match": true
+  }
+ ],
+ "layer_totals": {
+  "bronze_rows": 40000.0,
+  "silver_orders": 36474.0,
+  "quarantine_rows": 1384.0,
+  "gold_daily_rows": 198.0,
+  "gold_customers": 4997.0
+ },
+ "daily_sales": [
+  {
+   "order_date": "2026-10-13",
+   "gross_revenue": 116862.93,
+   "net_revenue": 79670.98,
+   "total_orders": 96.0,
+   "cancelled_orders": 39.0
+  },
+  {
+   "order_date": "2026-10-14",
+   "gross_revenue": 12614805.25,
+   "net_revenue": 12457782.8,
+   "total_orders": 9096.0,
+   "cancelled_orders": 120.0
+  },
+  {
+   "order_date": "2026-10-15",
+   "gross_revenue": 12654471.58,
+   "net_revenue": 12450442.69,
+   "total_orders": 9090.0,
+   "cancelled_orders": 130.0
+  },
+  {
+   "order_date": "2026-10-16",
+   "gross_revenue": 12467178.08,
+   "net_revenue": 12254404.85,
+   "total_orders": 9098.0,
+   "cancelled_orders": 148.0
+  },
+  {
+   "order_date": "2026-10-17",
+   "gross_revenue": 12402632.23,
+   "net_revenue": 12294535.83,
+   "total_orders": 9094.0,
+   "cancelled_orders": 65.0
+  }
+ ],
+ "top_skus": [
+  {
+   "product_sku": "SKU-1016",
+   "net_revenue": 1358132.01,
+   "total_orders": 985.0
+  },
+  {
+   "product_sku": "SKU-1012",
+   "net_revenue": 1347824.03,
+   "total_orders": 960.0
+  },
+  {
+   "product_sku": "SKU-1008",
+   "net_revenue": 1330525.35,
+   "total_orders": 951.0
+  },
+  {
+   "product_sku": "SKU-1036",
+   "net_revenue": 1316661.48,
+   "total_orders": 982.0
+  },
+  {
+   "product_sku": "SKU-1028",
+   "net_revenue": 1295702.55,
+   "total_orders": 941.0
+  },
+  {
+   "product_sku": "SKU-1023",
+   "net_revenue": 1282973.75,
+   "total_orders": 908.0
+  },
+  {
+   "product_sku": "SKU-1033",
+   "net_revenue": 1280743.21,
+   "total_orders": 906.0
+  },
+  {
+   "product_sku": "SKU-1032",
+   "net_revenue": 1279459.77,
+   "total_orders": 912.0
+  },
+  {
+   "product_sku": "SKU-1030",
+   "net_revenue": 1274993.66,
+   "total_orders": 901.0
+  },
+  {
+   "product_sku": "SKU-1021",
+   "net_revenue": 1274368.98,
+   "total_orders": 939.0
+  }
+ ],
+ "ltv_bands": [
+  {
+   "band": "Under 2.5k",
+   "sort_key": 1.0,
+   "customers": 173.0
+  },
+  {
+   "band": "2.5k-5k",
+   "sort_key": 2.0,
+   "customers": 574.0
+  },
+  {
+   "band": "5k-10k",
+   "sort_key": 3.0,
+   "customers": 1986.0
+  },
+  {
+   "band": "10k-15k",
+   "sort_key": 4.0,
+   "customers": 1508.0
+  },
+  {
+   "band": "15k and over",
+   "sort_key": 5.0,
+   "customers": 756.0
+  }
+ ],
+ "quarantine_reasons": [
+  {
+   "reason": "missing_customer_id",
+   "rows": 600.0
+  },
+  {
+   "reason": "non_positive_quantity",
+   "rows": 400.0
+  },
+  {
+   "reason": "negative_unit_price",
+   "rows": 200.0
+  },
+  {
+   "reason": "malformed_customer_id",
+   "rows": 200.0
+  }
+ ]
+}

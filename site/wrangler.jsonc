@@ -1,0 +1,10 @@
+// Static Worker that serves public/ (the dashboard page and its data snapshot) at lakehouse.praponb.com.
+//   python3 snapshot.py LOG_DIR      # refresh public/data.json
+//   npx wrangler@4.20.0 deploy       # run from this folder
+{
+  "name": "lakehouse-dashboard",
+  "compatibility_date": "2025-06-01",
+  "assets": { "directory": "./public" },
+  "workers_dev": false,
+  "routes": [{ "pattern": "lakehouse.praponb.com", "custom_domain": true }]
+}

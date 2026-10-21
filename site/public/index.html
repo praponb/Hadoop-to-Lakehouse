@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hadoop to Lakehouse</title>
+<meta name="description" content="How a day of legacy ERP orders moves from Hadoop HDFS through Airflow and GCS into a Databricks lakehouse, with the numbers from each step.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+/* Layout: one reading column; the five migration steps as a row of cards joined by arrows, then card grids. */
+:root {
+  color-scheme: light;
+  --bg: #f4f6f5;
+  --panel: #fcfcfb;
+  --fg: #141a1b;
+  --muted: #545b5c;
+  --line: #dde2e1;
+  --grid: #e8ebea;
+  --ok: #0a7a0a;
+  --bad: #b42f2f;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4;
+  --font-display: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111313; --panel: #1a1a19; --fg: #f0efec; --muted: #b5b9b4; --line: #2d3130; --grid: #262928;
+    --ok: #4cc24c; --bad: #f07575;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111313; --panel: #1a1a19; --fg: #f0efec; --muted: #b5b9b4; --line: #2d3130; --grid: #262928;
+  --ok: #4cc24c; --bad: #f07575;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body {
+  margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.55 var(--font-body);
+  font-variant-numeric: tabular-nums;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.page { max-width: 72rem; margin-inline: auto; padding-block: 2.5rem 3rem; display: grid; gap: 2.5rem; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+p { margin: 0; }
+a { color: var(--s1); }
+a:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+.eyebrow { font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.head { display: grid; gap: .6rem; }
+.title { font-family: var(--font-display); font-weight: 600; font-size: clamp(2rem, 5vw, 3rem); line-height: 1.05; }
+.takeaway { font-size: 1.05rem; max-width: 64ch; color: var(--muted); }
+.takeaway b { color: var(--fg); font-weight: 600; }
+.section { display: grid; gap: 1rem; min-width: 0; }
+.h2 { font-size: 1.25rem; font-weight: 600; }
+.h3 { font-size: 1rem; font-weight: 500; }
+.note { font-size: .8125rem; color: var(--muted); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.25rem; display: grid; gap: .5rem; align-content: start; min-width: 0; }
+.flow { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; grid-template-columns: 1fr; }
+.flow .card { position: relative; }
+@media (min-width: 40rem) { .flow { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 64rem) {
+  .flow { grid-template-columns: repeat(5, 1fr); gap: 1.75rem; }
+  .flow .card:not(:last-child)::after {
+    content: "→"; position: absolute; right: -1.45rem; top: 50%; transform: translateY(-50%);
+    color: var(--muted); font-size: 1.1rem;
+  }
+}
+.tech { font-size: .75rem; color: var(--muted); }
+.big { font-family: var(--font-display); font-weight: 400; font-size: 2.1rem; line-height: 1.1; }
+.sub { font-size: .8125rem; color: var(--muted); }
+.grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); }
+.tiles { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); }
+.chart { position: relative; min-height: 8rem; }
+.chart svg { display: block; overflow: visible; }
+.tick { fill: var(--muted); font-size: 12px; font-family: var(--font-body); }
+.legend { display: flex; flex-wrap: wrap; gap: .3rem 1rem; font-size: .8125rem; color: var(--muted); margin-bottom: .5rem; }
+.key { display: inline-flex; align-items: center; gap: .4rem; }
+.sw { width: .65rem; height: .65rem; border-radius: 2px; flex: none; }
+.tip {
+  position: absolute; z-index: 2; pointer-events: none; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; box-shadow: 0 6px 20px rgb(0 0 0 / .14); padding: .4rem .6rem; font-size: .8125rem;
+  white-space: nowrap; display: grid; gap: 2px;
+}
+.tip-head { color: var(--muted); }
+.tip-row { display: flex; align-items: center; gap: .4rem; }
+.tip-row b { margin-left: auto; padding-left: 1rem; font-weight: 600; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+th, td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 500; }
+td.file { font-family: var(--font-mono); font-size: .78rem; }
+.num { text-align: right; }
+.ok { color: var(--ok); font-weight: 600; }
+.bad { color: var(--bad); font-weight: 600; }
+.foot { font-size: .8125rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 1rem; display: grid; gap: .3rem; }
+.error { color: var(--bad); }
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="head">
+    <span class="eyebrow" id="snapshot">Migration report</span>
+    <h1 class="title">Hadoop to Lakehouse</h1>
+    <p class="takeaway" id="takeaway">Loading the numbers…</p>
+  </header>
+
+  <section class="section" id="path" aria-labelledby="path-h">
+    <h2 class="h2" id="path-h">From HDFS to Gold</h2>
+    <ol class="flow">
+      <li class="card">
+        <span class="eyebrow">Step 1</span>
+        <span class="h3">Hadoop HDFS</span>
+        <span class="tech">Legacy source, HDFS 3.2.1 in Docker</span>
+        <span class="big" data-v="source_rows">—</span>
+        <span class="sub">rows in <span data-v="files">—</span> CSV files under /legacy/erp/orders</span>
+      </li>
+      <li class="card">
+        <span class="eyebrow">Step 2</span>
+        <span class="h3">GCS landing bucket</span>
+        <span class="tech">Copied by Airflow over WebHDFS</span>
+        <span class="big" data-v="files_matched">—</span>
+        <span class="sub">files identical to HDFS, <span data-v="gcs_mb">—</span> in all</span>
+      </li>
+      <li class="card">
+        <span class="eyebrow">Step 3</span>
+        <span class="h3">Bronze</span>
+        <span class="tech">Databricks Auto Loader</span>
+        <span class="big" data-v="bronze_rows">—</span>
+        <span class="sub">raw rows; new source columns are added automatically</span>
+      </li>
+      <li class="card">
+        <span class="eyebrow">Step 4</span>
+        <span class="h3">Silver</span>
+        <span class="tech">Data-quality rules, then MERGE</span>
+        <span class="big" data-v="silver_orders">—</span>
+        <span class="sub">unique orders; <span data-v="quarantine_rows">—</span> rows quarantined</span>
+      </li>
+      <li class="card">
+        <span class="eyebrow">Step 5</span>
+        <span class="h3">Gold</span>
+        <span class="tech">Delta tables BigQuery can read</span>
+        <span class="big" data-v="gold_daily_rows">—</span>
+        <span class="sub">day × SKU rows; <span data-v="gold_customers">—</span> customers</span>
+      </li>
+    </ol>
+  </section>
+
+  <section class="section" id="batches" aria-labelledby="batches-h">
+    <h2 class="h2" id="batches-h">Each batch day</h2>
+    <div class="grid">
+      <div class="card">
+        <h3 class="h3">Where each day's Bronze rows went</h3>
+        <p class="note">Rows neither kept nor quarantined were older copies of an order, removed when Silver deduplicates.</p>
+        <div class="chart" id="outcome-chart"></div>
+      </div>
+      <div class="card">
+        <h3 class="h3">Run time per batch day, in minutes</h3>
+        <p class="note">The HDFS check and copy take seconds. Nearly all the time is the three Databricks steps on serverless compute.</p>
+        <div class="chart" id="runtime-chart"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="files" aria-labelledby="files-h">
+    <h2 class="h2" id="files-h">Files copied from HDFS to GCS</h2>
+    <div class="card">
+      <p class="note">Each file's size in HDFS and in the landing bucket after Airflow's copy step.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>File</th><th>Batch day</th><th class="num">Rows</th><th class="num">HDFS bytes</th><th class="num">GCS bytes</th><th>Identical</th></tr></thead>
+          <tbody id="files-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="quality" aria-labelledby="quality-h">
+    <h2 class="h2" id="quality-h">Data quality</h2>
+    <div class="card">
+      <h3 class="h3">Why rows were quarantined</h3>
+      <p class="note">The mock source data is dirty on purpose. A row can fail more than one rule, so reasons add up to more than the quarantined rows.</p>
+      <div class="chart" id="reasons-chart"></div>
+    </div>
+  </section>
+
+  <section class="section" id="sales" aria-labelledby="sales-h">
+    <h2 class="h2" id="sales-h">Sales in Gold</h2>
+    <div class="tiles">
+      <div class="card"><span class="sub">Net revenue</span><span class="big" data-v="net_revenue">—</span><span class="sub">excludes cancelled orders</span></div>
+      <div class="card"><span class="sub">Orders</span><span class="big" data-v="total_orders">—</span><span class="sub">across all order dates</span></div>
+      <div class="card"><span class="sub">Cancellation rate</span><span class="big" data-v="cancellation_rate">—</span><span class="sub">cancelled orders ÷ orders</span></div>
+      <div class="card"><span class="sub">Customers</span><span class="big" data-v="gold_customers">—</span><span class="sub">with at least one order</span></div>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <h3 class="h3">Net revenue by order date</h3>
+        <p class="note">Small days hold only orders whose timestamps fall outside a batch day.</p>
+        <div class="chart" id="revenue-chart"></div>
+      </div>
+      <div class="card">
+        <h3 class="h3">Top 10 SKUs by net revenue</h3>
+        <div class="chart" id="sku-chart"></div>
+      </div>
+      <div class="card">
+        <h3 class="h3">Customers by lifetime spend</h3>
+        <div class="chart" id="ltv-chart"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <p>The orders are mock ERP data from the project's generator, made dirty on purpose to test the quality rules. The numbers are a snapshot taken after the last run, not live queries.</p>
+    <p>Source and documentation: <a href="https://github.com/praponb/Hadoop-to-Lakehouse">github.com/praponb/Hadoop-to-Lakehouse</a></p>
+  </footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+(() => {
+  const n = d3.format(',');
+  const compact = (v) => new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(v);
+  const big = (v) => (Math.abs(v) >= 10000 ? compact(v) : n(v));
+  const pct = d3.format('.1%');
+  const money = d3.format(',.2f');
+  const day = (s) => d3.utcFormat('%b %-d')(new Date(String(s).slice(0, 10) + 'T00:00:00Z'));
+  // Readable names for the rules in databricks/src/silver_transform.py error_reason().
+  const REASONS = { missing_order_id: 'Missing order ID', missing_customer_id: 'Missing customer ID',
+                    malformed_customer_id: 'Malformed customer ID', invalid_quantity: 'Quantity not a number',
+                    non_positive_quantity: 'Quantity zero or less', invalid_unit_price: 'Price not a number',
+                    negative_unit_price: 'Negative unit price', unknown_order_status: 'Unknown order status',
+                    unparseable_order_timestamp: 'Unreadable order time', unparseable_updated_at: 'Unreadable update time' };
+  const reason = (r) => REASONS[r] || r.replaceAll('_', ' ');
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const colors = () => ['--s1', '--s2', '--s3', '--s4', '--s5'].map(css);
+  let data = null;
+
+  function tooltip(el) {
+    const tip = document.createElement('div'); tip.className = 'tip'; tip.hidden = true; el.append(tip);
+    return {
+      show(event, head, lines) {
+        tip.replaceChildren();
+        const h = document.createElement('div'); h.className = 'tip-head'; h.textContent = head; tip.append(h);
+        for (const l of lines) {
+          const r = document.createElement('div'); r.className = 'tip-row';
+          if (l.color) { const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = l.color; r.append(sw); }
+          const name = document.createElement('span'); name.textContent = l.label;
+          const val = document.createElement('b'); val.textContent = l.value;
+          r.append(name, val); tip.append(r);
+        }
+        tip.hidden = false;
+        const [px, py] = d3.pointer(event, el);
+        tip.style.left = Math.max(0, Math.min(el.clientWidth - tip.offsetWidth, px + 12)) + 'px';
+        tip.style.top = Math.max(0, py - tip.offsetHeight - 8) + 'px';
+      },
+      hide() { tip.hidden = true; }
+    };
+  }
+
+  function legend(el, series) {
+    const lg = document.createElement('div'); lg.className = 'legend';
+    for (const s of series) {
+      const k = document.createElement('span'); k.className = 'key';
+      const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = s.color;
+      const t = document.createElement('span'); t.textContent = s.label;
+      k.append(sw, t); lg.append(k);
+    }
+    el.append(lg);
+  }
+
+  // Horizontal bars, stacked when there is more than one series; a 2px gap separates segments.
+  function hbars(el, rows, { cat, label, series, fmt }) {
+    el.replaceChildren();
+    if (series.length > 1) legend(el, series);
+    const W = Math.max(260, el.clientWidth), bh = 22, gap = 10, top = 2, bottom = 22;
+    const svg = d3.select(el).append('svg').attr('width', '100%');
+    const probe = svg.append('g').attr('class', 'tick');
+    let lw = 0;
+    for (const r of rows) lw = Math.max(lw, probe.append('text').text(label(r)).node().getComputedTextLength());
+    probe.remove();
+    const H = top + rows.length * (bh + gap) - gap + bottom, left = lw + 10, right = 14;
+    svg.attr('viewBox', `0 0 ${W} ${H}`).attr('height', H);
+    const total = (r) => d3.sum(series, (s) => r[s.key]);
+    const x = d3.scaleLinear([0, d3.max(rows, total) || 1], [left, W - right]).nice();
+    const y = d3.scaleBand(rows.map((r) => r[cat]), [top, H - bottom]).paddingInner(gap / (bh + gap));
+    const ticks = x.ticks(Math.max(2, Math.floor((W - left) / 90)));
+    svg.append('g').selectAll('line').data(ticks).join('line')
+      .attr('x1', x).attr('x2', x).attr('y1', top).attr('y2', H - bottom).attr('stroke', css('--grid'));
+    svg.append('g').attr('class', 'tick').selectAll('text').data(ticks).join('text')
+      .attr('x', x).attr('y', H - 6).attr('text-anchor', 'middle').text((v) => compact(v));
+    svg.append('g').attr('class', 'tick').selectAll('text').data(rows).join('text')
+      .attr('x', left - 8).attr('y', (r) => y(r[cat]) + y.bandwidth() / 2).attr('dy', '0.35em')
+      .attr('text-anchor', 'end').text(label);
+    const tip = tooltip(el);
+    for (const r of rows) {
+      let acc = 0;
+      series.forEach((s, i) => {
+        const x0 = x(acc), x1 = x(acc + r[s.key]);
+        acc += r[s.key];
+        const inset = (i ? 1 : 0) + (i < series.length - 1 ? 1 : 0);
+        svg.append('rect').attr('x', x0 + (i ? 1 : 0)).attr('y', y(r[cat]))
+          .attr('width', Math.max(0, x1 - x0 - inset)).attr('height', y.bandwidth()).attr('rx', 3).attr('fill', s.color);
+      });
+      svg.append('rect').attr('x', 0).attr('y', y(r[cat]) - gap / 2).attr('width', W).attr('height', bh + gap)
+        .attr('fill', 'transparent')
+        .on('mousemove', (e) => tip.show(e, label(r), series.map((s) => ({ color: series.length > 1 ? s.color : null, label: s.label, value: fmt(r[s.key]) }))))
+        .on('mouseleave', () => tip.hide());
+    }
+  }
+
+  // Vertical bars over order dates; labels thin out when the bars get narrow.
+  function vbars(el, rows, { xKey, yKey, fmt, color, name }) {
+    el.replaceChildren();
+    const W = Math.max(260, el.clientWidth), H = 220, top = 8, bottom = 24;
+    const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`).attr('height', H);
+    const yScale = d3.scaleLinear([0, d3.max(rows, (r) => r[yKey]) || 1], [H - bottom, top]).nice();
+    const yt = yScale.ticks(4);
+    const probe = svg.append('g').attr('class', 'tick');
+    const lw = d3.max(yt, (v) => probe.append('text').text(compact(v)).node().getComputedTextLength());
+    probe.remove();
+    const left = lw + 8, right = 4;
+    const xScale = d3.scaleBand(rows.map((r) => r[xKey]), [left, W - right]).paddingInner(0.2).paddingOuter(0.1);
+    svg.append('g').selectAll('line').data(yt).join('line')
+      .attr('x1', left).attr('x2', W - right).attr('y1', yScale).attr('y2', yScale).attr('stroke', css('--grid'));
+    svg.append('g').attr('class', 'tick').selectAll('text').data(yt).join('text')
+      .attr('x', left - 6).attr('y', yScale).attr('dy', '0.35em').attr('text-anchor', 'end').text((v) => compact(v));
+    const every = Math.max(1, Math.ceil(46 / xScale.step()));
+    svg.append('g').attr('class', 'tick').selectAll('text').data(rows.filter((_, i) => i % every === 0)).join('text')
+      .attr('x', (r) => xScale(r[xKey]) + xScale.bandwidth() / 2).attr('y', H - 6).attr('text-anchor', 'middle')
+      .text((r) => day(r[xKey]));
+    const tip = tooltip(el);
+    const bars = svg.append('g').selectAll('rect').data(rows).join('rect')
+      .attr('x', (r) => xScale(r[xKey])).attr('width', xScale.bandwidth())
+      .attr('y', (r) => yScale(r[yKey])).attr('height', (r) => Math.max(1, yScale(0) - yScale(r[yKey])))
+      .attr('rx', 3).attr('fill', color);
+    svg.append('g').selectAll('rect').data(rows).join('rect')
+      .attr('x', (r) => xScale(r[xKey]) - (xScale.step() - xScale.bandwidth()) / 2).attr('width', xScale.step())
+      .attr('y', top).attr('height', H - bottom - top).attr('fill', 'transparent')
+      .on('mousemove', (e, r) => { bars.attr('opacity', (b) => (b === r ? 1 : 0.45)); tip.show(e, day(r[xKey]), [{ label: name, value: fmt(r[yKey]) }]); })
+      .on('mouseleave', () => { bars.attr('opacity', 1); tip.hide(); });
+  }
+
+  function derive(d) {
+    const files = d.file_copies;
+    const sum = (rows, k) => d3.sum(rows, (r) => r[k]);
+    const cancelled = sum(d.daily_sales, 'cancelled_orders'), orders = sum(d.daily_sales, 'total_orders');
+    const steps = { verify_hdfs_partition: 'copy', distcp_hdfs_to_gcs: 'copy', run_databricks_bronze: 'bronze',
+                    run_databricks_silver: 'silver', run_databricks_gold: 'gold', audit_row_counts: 'audit' };
+    const runs = d3.rollups(d.pipeline_tasks, (ts) => {
+      const r = { copy: 0, bronze: 0, silver: 0, gold: 0, audit: 0 };
+      for (const t of ts) r[steps[t.task]] += t.minutes;
+      return r;
+    }, (t) => t.batch_date).map(([batch_date, r]) => ({ batch_date, ...r }));
+    return {
+      values: {
+        ...d.layer_totals,
+        files: files.length,
+        files_matched: files.filter((f) => f.match).length,
+        source_rows: sum(files, 'rows'),
+        gcs_mb: (sum(files, 'gcs_bytes') / 1e6).toFixed(1) + ' MB',
+        net_revenue: sum(d.daily_sales, 'net_revenue'),
+        total_orders: orders,
+        cancellation_rate: orders ? cancelled / orders : 0,
+        batches: d.batch_audit.length,
+        max_dup_keys: d3.max(d.batch_audit, (a) => a.silver_dup_keys)
+      },
+      outcome: d.batch_audit.map((a) => ({ batch_date: a.batch_date, silver: a.silver, quarantine: a.quarantine,
+                                           duplicates_removed: a.bronze - a.silver - a.quarantine })),
+      runs
+    };
+  }
+
+  function render() {
+    if (!data) return;
+    const C = colors();
+    const { values, outcome, runs } = derive(data);
+    const when = new Date(data.snapshot_at);
+    document.getElementById('snapshot').textContent =
+      'Migration report · snapshot ' + when.toLocaleString('en-GB', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' Bangkok time';
+    const t = document.getElementById('takeaway');
+    t.replaceChildren();
+    const b = (v) => { const e = document.createElement('b'); e.textContent = v; return e; };
+    t.append(b(n(values.source_rows)), ' legacy ERP order rows in ', b(n(values.files)), ' HDFS files reached the lakehouse in ',
+      b(n(values.batches)), ' daily Airflow runs. ', b(`${values.files_matched} of ${values.files}`),
+      ' files arrived in GCS byte for byte, and Silver ended with ', b(n(values.max_dup_keys)), ' duplicate order keys.');
+    document.querySelectorAll('[data-v]').forEach((el) => {
+      const k = el.dataset.v, v = values[k];
+      el.textContent = typeof v === 'string' ? v : k === 'cancellation_rate' ? pct(v) : el.classList.contains('big') ? big(v) : n(v);
+    });
+
+    hbars(document.getElementById('outcome-chart'), outcome, {
+      cat: 'batch_date', label: (r) => day(r.batch_date), fmt: n,
+      series: [{ key: 'silver', label: 'Kept in Silver', color: C[0] }, { key: 'quarantine', label: 'Quarantined', color: C[1] },
+               { key: 'duplicates_removed', label: 'Duplicates removed', color: C[2] }]
+    });
+    hbars(document.getElementById('runtime-chart'), runs, {
+      cat: 'batch_date', label: (r) => day(r.batch_date), fmt: (v) => v.toFixed(1) + ' min',
+      series: [{ key: 'copy', label: 'HDFS check and copy', color: C[0] }, { key: 'bronze', label: 'Bronze', color: C[1] },
+               { key: 'silver', label: 'Silver', color: C[2] }, { key: 'gold', label: 'Gold', color: C[3] },
+               { key: 'audit', label: 'Audit', color: C[4] }]
+    });
+    hbars(document.getElementById('reasons-chart'), data.quarantine_reasons, {
+      cat: 'reason', label: (r) => reason(r.reason), fmt: n, series: [{ key: 'rows', label: 'Rows', color: C[1] }]
+    });
+    vbars(document.getElementById('revenue-chart'), data.daily_sales, { xKey: 'order_date', yKey: 'net_revenue', fmt: money, color: C[0], name: 'Net revenue' });
+    hbars(document.getElementById('sku-chart'), data.top_skus, {
+      cat: 'product_sku', label: (r) => r.product_sku, fmt: money, series: [{ key: 'net_revenue', label: 'Net revenue', color: C[0] }]
+    });
+    hbars(document.getElementById('ltv-chart'), [...data.ltv_bands].sort((a, b) => a.sort_key - b.sort_key), {
+      cat: 'band', label: (r) => r.band, fmt: n, series: [{ key: 'customers', label: 'Customers', color: C[0] }]
+    });
+
+    const body = document.getElementById('files-body');
+    body.replaceChildren();
+    for (const f of data.file_copies) {
+      const tr = document.createElement('tr');
+      [[f.file, 'file'], [f.batch_date, ''], [n(f.rows), 'num'], [n(f.hdfs_bytes), 'num'],
+       [f.gcs_bytes == null ? 'missing' : n(f.gcs_bytes), 'num'], [f.match ? 'Yes' : 'No', f.match ? 'ok' : 'bad']]
+        .forEach(([v, cls]) => { const td = document.createElement('td'); td.textContent = v; if (cls) td.className = cls; tr.append(td); });
+      body.append(tr);
+    }
+  }
+
+  fetch('data.json')
+    .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then((d) => { data = d; render(); })
+    .catch(() => { const t = document.getElementById('takeaway'); t.className = 'takeaway error'; t.textContent = "The numbers didn't load. Reload the page to try again."; });
+
+  let raf = 0;
+  addEventListener('resize', () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(render); });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+})();
+</script>
+</body>
+</html>
