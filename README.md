@@ -9,6 +9,9 @@ HDFS and Airflow run locally in Docker to save trial credits. GCS, Databricks (s
 the real cloud services. The full specification is in [`SPEC.md`](SPEC.md), transcribed from `spec.docx`, with
 implementation notes on every deviation.
 
+**Dashboard:** [lakehouse.praponb.com](https://lakehouse.praponb.com) shows the migration step by step, from the
+HDFS files to the Gold tables, with numbers from the latest run.
+
 ## Project overview
 
 ### The scenario
@@ -85,9 +88,11 @@ Every requirement in the spec is implemented and was run against the live servic
 - The AI/BI dashboard over Gold, Bronze and Silver
 - 52 local tests passing
 
-**The cloud resources were torn down on 2026-10-20** at the end of the trial, following
-[`trial-end-cleanup.md`](trial-end-cleanup.md); the GCP project itself is kept, empty. Everything needed to
-rebuild the pipeline is in this repo (see [Getting started](#getting-started)). The work log is in
+The cloud resources were torn down on 2026-10-20 at the end of the trial, following
+[`trial-end-cleanup.md`](trial-end-cleanup.md). **They were rebuilt on 2026-10-21** from this repo (see
+[Getting started](#getting-started)), without BigQuery. Four days of mock data (2026-10-14 to 2026-10-17) ran
+through the Airflow DAG, so the AI/BI dashboard has data again. The same numbers are published at
+[lakehouse.praponb.com](https://lakehouse.praponb.com) (see [`site/`](site/)). The work log is in
 [`pending-item.md`](pending-item.md), where every item is closed.
 
 ## Architecture
@@ -157,6 +162,7 @@ The Databricks steps use `DatabricksRunNowOperator` on the deployed Asset Bundle
 | `databricks/setup_uc.sql` | Unity Catalog setup: external locations, catalog, schemas, Silver and Gold tables |
 | `databricks/src/` | `bronze_autoloader.py`, `silver_transform.py`, `gold_aggregations.py`, `common/spark_session.py` |
 | `bigquery/create_biglake_tables.sql` | BigLake `DELTA_LAKE` tables over Gold |
+| `site/` | Public dashboard at lakehouse.praponb.com: `public/index.html` (d3 page), `public/data.json` (numbers snapshot), `snapshot.py` (refreshes the snapshot from the Airflow logs, HDFS, GCS and the SQL warehouse), `wrangler.jsonc` (Cloudflare Worker) |
 | `tests/` | Local pytest suite: generator, Silver, Gold, transfer bridge (with fakes) and DAG integrity |
 | `SPEC.md` · `spec.docx` | Specification and implementation notes |
 | `pending-item.md` · `trial-end-cleanup.md` | Open items and teardown checklist |
@@ -273,4 +279,12 @@ These are explained in full in the [`SPEC.md` implementation notes](SPEC.md#impl
 While deployed, nothing runs on its own: the DAG is paused and the bundle job has no schedule, so the only
 ongoing costs are GCS storage and the SQL warehouse while the dashboard or the audit queries it. To tear
 everything down, follow [`trial-end-cleanup.md`](trial-end-cleanup.md) in order. This project's resources were
-removed that way on 2026-10-20.
+removed that way on 2026-10-20, then rebuilt on 2026-10-21.
+
+The page at lakehouse.praponb.com is a static Cloudflare Worker on the free plan. It serves a saved snapshot,
+so it keeps working after a teardown. To update it after new runs:
+
+```bash
+python3 site/snapshot.py <dir with the run_YYYY-MM-DD.log files from airflow dags test>
+cd site && npx wrangler@4.20.0 deploy
+```

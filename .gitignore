@@ -21,3 +21,6 @@ databricks/.databricks/
 airflow/logs/
 
 .DS_Store
+
+# Wrangler build cache (site/)
+.wrangler/
